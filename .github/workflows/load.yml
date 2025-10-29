@@ -24,7 +24,7 @@ jobs:
           done
       
       - run: |
-          git config user.name bot
-          git config user.email bot@github.com
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add README.md
           git diff --cached --quiet || (git commit -m "Update [skip ci]" && git push)
