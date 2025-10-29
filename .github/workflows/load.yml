@@ -17,12 +17,29 @@ jobs:
       
       - run: |
           echo "# Anime Collection" > README.md
+          echo "" >> README.md
+          
+          total=$(grep -oP 'anime/\K[0-9]+' completed | wc -l)
+          current=0
+          
           grep -oP 'anime/\K[0-9]+' completed | while read id; do
-            curl -s "https://api.jikan.moe/v4/anime/$id" | 
-            jq -r '.data.images.jpg.image_url // empty' | 
-            xargs -I {} echo "<img src=\"{}\" width=\"30%\">" >> README.md
+            current=$((current + 1))
+            echo "[$current/$total] Fetching anime ID: $id"
+            
+            image_url=$(curl -s "https://api.jikan.moe/v4/anime/$id" | jq -r '.data.images.jpg.image_url // empty')
+            
+            if [ -n "$image_url" ]; then
+              echo "  ✓ Image found: $image_url"
+              echo -n "<a href=\"https://myanimelist.net/anime/$id\"><img src=\"$image_url\" width=\"225\" height=\"338\"></a>" >> README.md
+            else
+              echo "  ✗ No image found for ID: $id"
+            fi
+            
             sleep 0.5
           done
+          
+          echo "" >> README.md
+          echo "Finished processing $total anime entries"
       
       - run: |
           git config user.name "github-actions"
