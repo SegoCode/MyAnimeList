@@ -1,0 +1,30 @@
+name: Update README
+
+on:
+  push:
+    paths: [completed]
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - run: |
+          echo "# Anime Collection" > README.md
+          grep -oP 'anime/\K[0-9]+' completed | while read id; do
+            curl -s "https://api.jikan.moe/v4/anime/$id" | 
+            jq -r '.data.images.jpg.image_url // empty' | 
+            xargs -I {} echo "<img src=\"{}\" width=\"30%\">" >> README.md
+            sleep 0.5
+          done
+      
+      - run: |
+          git config user.name bot
+          git config user.email bot@github.com
+          git add README.md
+          git diff --cached --quiet || (git commit -m "Update [skip ci]" && git push)
