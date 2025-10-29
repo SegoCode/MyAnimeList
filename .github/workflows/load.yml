@@ -19,6 +19,8 @@ jobs:
           echo "# Anime Collection" > README.md
           echo "" >> README.md
           
+          echo -n "<p align="center">">> README.md
+          
           total=$(grep -oP 'anime/\K[0-9]+' completed | wc -l)
           current=0
           
