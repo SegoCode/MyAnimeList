@@ -41,7 +41,7 @@ jobs:
             
             if [ -n "$image_url" ]; then
               echo "  ✓ Image found: $image_url"
-              echo -n "<a href=\"https://myanimelist.net/anime/$id\"><img src=\"$image_url\" width=\"225\" height=\"300\"></a>" >> README.md
+              echo -n "<a href=\"https://myanimelist.net/anime/$id\"><img src=\"$image_url\" width=\"225\" height=\"300\"></a> " >> README.md
             else
               echo "  ✗ No image available for ID: $id"
             fi
