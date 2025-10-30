@@ -16,7 +16,7 @@ jobs:
           echo '<img src="media/MyAnimeListLogo.png" >' >> README.md
           echo "" >> README.md
           echo '#' >> README.md
-          echo -n '<p align="center">' > README.md
+          echo -n '<p align="center">' >> README.md
           total=$(grep -oP 'anime/\K[0-9]+' completed | wc -l)
           current=0
           
