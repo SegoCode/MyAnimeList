@@ -24,13 +24,14 @@ jobs:
           response_body=""
           response_status=""
 
-          fetch_jikan() {
+          fetch_url() {
             local url="$1"
             local attempt=1
             local delay=2
+            local max_attempts=3
             local response
 
-            while (( attempt <= 5 )); do
+            while (( attempt <= max_attempts )); do
               sleep 1.1
               response=$(curl -sS --connect-timeout 10 --max-time 30 -w '\n%{http_code}' "$url" 2>/dev/null) || response=$'\n000'
               response_status="${response##*$'\n'}"
@@ -41,21 +42,36 @@ jobs:
               fi
 
               if [[ "$response_status" == "429" || "$response_status" =~ ^5[0-9][0-9]$ || "$response_status" == "000" ]]; then
-                if (( attempt == 5 )); then
+                if (( attempt == max_attempts )); then
                   break
                 fi
-                echo "  HTTP $response_status for $url; retrying in ${delay}s (attempt $((attempt + 1))/5)"
+                echo "  HTTP $response_status for $url - retrying in ${delay}s (attempt $((attempt + 1))/$max_attempts)"
                 sleep "$delay"
                 delay=$((delay * 2))
                 attempt=$((attempt + 1))
                 continue
               fi
 
-              echo "  HTTP $response_status for $url; not retrying"
-              return 0
+              echo "  HTTP $response_status for $url - not retrying"
+              return 1
             done
 
             echo "  HTTP $response_status for $url after $attempt attempt(s)"
+            return 1
+          }
+
+          image_from_jikan() {
+            jq -r '.data.images.jpg.image_url // empty' <<< "$response_body" 2>/dev/null || true
+          }
+
+          image_from_jikan_pictures() {
+            jq -r '.data[0].jpg.image_url // .data[0].jpg.large_image_url // empty' <<< "$response_body" 2>/dev/null || true
+          }
+
+          image_from_mal_page() {
+            printf '%s' "$response_body" |
+              grep -oE 'https://cdn\.myanimelist\.net/images/anime/[^"'\''[:space:]]+\.(jpg|jpeg|png|webp)' |
+              head -n 1 || true
           }
 
           {
@@ -71,14 +87,23 @@ jobs:
           while read -r id; do
             current=$((current + 1))
             echo "[$current/$total] Fetching anime ID: $id"
+            image_url=""
 
-            fetch_jikan "https://api.jikan.moe/v4/anime/$id"
-            image_url=$(jq -r '.data.images.jpg.image_url // empty' <<< "$response_body" 2>/dev/null || true)
+            if fetch_url "https://api.jikan.moe/v4/anime/$id"; then
+              image_url=$(image_from_jikan)
+              if [[ -z "$image_url" ]]; then
+                echo "  No image in main endpoint, trying /pictures..."
+                if fetch_url "https://api.jikan.moe/v4/anime/$id/pictures"; then
+                  image_url=$(image_from_jikan_pictures)
+                fi
+              fi
+            fi
 
-            if [[ "$response_status" == "200" && -z "$image_url" ]]; then
-              echo "  No image in main endpoint, trying /pictures..."
-              fetch_jikan "https://api.jikan.moe/v4/anime/$id/pictures"
-              image_url=$(jq -r '.data[0].jpg.image_url // .data[0].jpg.large_image_url // empty' <<< "$response_body" 2>/dev/null || true)
+            if [[ -z "$image_url" ]]; then
+              echo "  Jikan failed, trying official MyAnimeList page..."
+              if fetch_url "https://myanimelist.net/anime/$id"; then
+                image_url=$(image_from_mal_page)
+              fi
             fi
 
             if [[ -z "$image_url" ]]; then
