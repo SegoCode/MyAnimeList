@@ -20,8 +20,6 @@ Personal MyAnimeList gallery generator. It reads completed anime URLs from `docs
 3. Run the [**Load anime gallery**](https://github.com/SegoCode/MyAnimeList/actions/workflows/load-anime-gallery.yml) workflow.
 4. When it finishes, open [`docs/README.md`](docs/README.md) to see the updated gallery.
 
-The generated gallery lives in [`docs/README.md`](docs/README.md).
-
 ---
 <p align="center"><a href="https://github.com/SegoCode/MyAnimeList/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=SegoCode/MyAnimeList" />
