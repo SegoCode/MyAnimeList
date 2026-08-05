@@ -20,7 +20,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          placeholder="https://placewaifu.com/image/225/300?blur"
+          placeholder="https://placewaifu.com/image/225/300?greyscale&blur"
           response_body=""
           response_status=""
 
