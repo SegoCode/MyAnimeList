@@ -16,8 +16,8 @@ Personal MyAnimeList gallery generator. It reads completed anime URLs from `docs
    https://myanimelist.net/anime/1535/Death_Note
    https://myanimelist.net/anime/5114/Fullmetal_Alchemist__Brotherhood
    ```
-2. Open the repository **Actions** tab.
-3. Run the **Load anime gallery** workflow.
+2. Open the repository [**Actions**](https://github.com/SegoCode/MyAnimeList/actions) tab.
+3. Run the [**Load anime gallery**](https://github.com/SegoCode/MyAnimeList/actions/workflows/load.yml) workflow.
 4. When it finishes, open [`docs/README.md`](docs/README.md) to see the updated gallery.
 
 ### Gallery
