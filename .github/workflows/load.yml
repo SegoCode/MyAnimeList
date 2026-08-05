@@ -18,37 +18,78 @@ jobs:
 
       - name: Generate docs/README.md
         run: |
-          echo '<p align="center">' > docs/README.md
-          echo '<img src="../media/MyAnimeListLogo.png" >' >> docs/README.md
-          echo "" >> docs/README.md
-          echo '#' >> docs/README.md
-          echo -n '<p align="center">' >> docs/README.md
+          set -euo pipefail
+
+          placeholder="https://placewaifu.com/image/225/300?blur"
+          response_body=""
+          response_status=""
+
+          fetch_jikan() {
+            local url="$1"
+            local attempt=1
+            local delay=2
+            local response
+
+            while (( attempt <= 5 )); do
+              sleep 1.1
+              response=$(curl -sS --connect-timeout 10 --max-time 30 -w '\n%{http_code}' "$url" 2>/dev/null) || response=$'\n000'
+              response_status="${response##*$'\n'}"
+              response_body="${response%$'\n'*}"
+
+              if [[ "$response_status" == "200" ]]; then
+                return 0
+              fi
+
+              if [[ "$response_status" == "429" || "$response_status" =~ ^5[0-9][0-9]$ || "$response_status" == "000" ]]; then
+                if (( attempt == 5 )); then
+                  break
+                fi
+                echo "  HTTP $response_status for $url; retrying in ${delay}s (attempt $((attempt + 1))/5)"
+                sleep "$delay"
+                delay=$((delay * 2))
+                attempt=$((attempt + 1))
+                continue
+              fi
+
+              echo "  HTTP $response_status for $url; not retrying"
+              return 0
+            done
+
+            echo "  HTTP $response_status for $url after $attempt attempt(s)"
+          }
+
+          {
+            echo '<p align="center">'
+            echo '<img src="../media/MyAnimeListLogo.png" >'
+            echo ""
+            echo '#'
+            echo -n '<p align="center">'
+          } > docs/README.md
           total=$(grep -oP 'anime/\K[0-9]+' docs/completed | wc -l)
           current=0
 
-          grep -oP 'anime/\K[0-9]+' docs/completed | while read -r id; do
+          while read -r id; do
             current=$((current + 1))
             echo "[$current/$total] Fetching anime ID: $id"
 
-            response=$(curl -s "https://api.jikan.moe/v4/anime/$id")
-            image_url=$(echo "$response" | jq -r '.data.images.jpg.image_url // empty')
+            fetch_jikan "https://api.jikan.moe/v4/anime/$id"
+            image_url=$(jq -r '.data.images.jpg.image_url // empty' <<< "$response_body" 2>/dev/null || true)
 
-            if [ -z "$image_url" ]; then
+            if [[ "$response_status" == "200" && -z "$image_url" ]]; then
               echo "  No image in main endpoint, trying /pictures..."
-              pics_response=$(curl -s "https://api.jikan.moe/v4/anime/$id/pictures")
-              image_url=$(echo "$pics_response" | jq -r '.data[0].jpg.image_url // .data[0].jpg.large_image_url // empty')
-              sleep 0.5
+              fetch_jikan "https://api.jikan.moe/v4/anime/$id/pictures"
+              image_url=$(jq -r '.data[0].jpg.image_url // .data[0].jpg.large_image_url // empty' <<< "$response_body" 2>/dev/null || true)
             fi
 
-            if [ -n "$image_url" ]; then
-              echo "  Image found: $image_url"
-              echo -n "<a href=\"https://myanimelist.net/anime/$id\"><img src=\"$image_url\" width=\"225\" height=\"300\"></a> " >> docs/README.md
+            if [[ -z "$image_url" ]]; then
+              image_url="$placeholder"
+              echo "  Using blurred placeholder"
             else
-              echo "  No image available for ID: $id"
+              echo "  Image found: $image_url"
             fi
 
-            sleep 0.5
-          done
+            echo -n "<a href=\"https://myanimelist.net/anime/$id\"><img src=\"$image_url\" width=\"225\" height=\"300\"></a> " >> docs/README.md
+          done < <(grep -oP 'anime/\K[0-9]+' docs/completed)
 
           echo "</p>" >> docs/README.md
           echo "" >> docs/README.md
