@@ -1,57 +1,66 @@
+name: Load anime gallery
+
 on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: load-anime-gallery
   cancel-in-progress: true
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      
-      - run: |
-          echo '<p align="center">' > README.md
-          echo '<img src="media/MyAnimeListLogo.png" >' >> README.md
-          echo "" >> README.md
-          echo '#' >> README.md
-          echo -n '<p align="center">' >> README.md
-          total=$(grep -oP 'anime/\K[0-9]+' completed | wc -l)
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Generate docs/README.md
+        run: |
+          echo '<p align="center">' > docs/README.md
+          echo '<img src="../media/MyAnimeListLogo.png" >' >> docs/README.md
+          echo "" >> docs/README.md
+          echo '#' >> docs/README.md
+          echo -n '<p align="center">' >> docs/README.md
+          total=$(grep -oP 'anime/\K[0-9]+' docs/completed | wc -l)
           current=0
-          
-          grep -oP 'anime/\K[0-9]+' completed | while read id; do
+
+          grep -oP 'anime/\K[0-9]+' docs/completed | while read -r id; do
             current=$((current + 1))
             echo "[$current/$total] Fetching anime ID: $id"
-            
-            # Intentar obtener imagen del endpoint principal
+
             response=$(curl -s "https://api.jikan.moe/v4/anime/$id")
             image_url=$(echo "$response" | jq -r '.data.images.jpg.image_url // empty')
-            
-            # Fallback: buscar en /pictures si no hay imagen
+
             if [ -z "$image_url" ]; then
-              echo "  ⚠ No image in main endpoint, trying /pictures..."
+              echo "  No image in main endpoint, trying /pictures..."
               pics_response=$(curl -s "https://api.jikan.moe/v4/anime/$id/pictures")
               image_url=$(echo "$pics_response" | jq -r '.data[0].jpg.image_url // .data[0].jpg.large_image_url // empty')
-              sleep 0.5  # Rate limit adicional para segunda llamada
+              sleep 0.5
             fi
-            
+
             if [ -n "$image_url" ]; then
-              echo "  ✓ Image found: $image_url"
-              echo -n "<a href=\"https://myanimelist.net/anime/$id\"><img src=\"$image_url\" width=\"225\" height=\"300\"></a> " >> README.md
+              echo "  Image found: $image_url"
+              echo -n "<a href=\"https://myanimelist.net/anime/$id\"><img src=\"$image_url\" width=\"225\" height=\"300\"></a> " >> docs/README.md
             else
-              echo "  ✗ No image available for ID: $id"
+              echo "  No image available for ID: $id"
             fi
-            
+
             sleep 0.5
           done
-          
-          echo "</p>" >> README.md
-          echo "" >> README.md
+
+          echo "</p>" >> docs/README.md
+          echo "" >> docs/README.md
           echo "Finished processing $total anime entries"
-      
-      - run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add README.md
-          git diff --cached --quiet || (git commit -m "Update [skip ci]" && git push)
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/README.md
+          if git diff --staged --quiet; then
+            exit 0
+          fi
+          git commit -m "docs: update anime gallery [skip ci]"
+          git push
