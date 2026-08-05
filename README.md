@@ -10,7 +10,7 @@ Personal MyAnimeList gallery generator. It reads completed anime URLs from `docs
 
 ## Quick Start & Information
 
-1. Edit `docs/completed` with one MyAnimeList URL per line:
+1. Edit [`docs/completed`](docs/completed) with one MyAnimeList URL per line:
 
    ```text
    https://myanimelist.net/anime/1535/Death_Note
