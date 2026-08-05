@@ -1,0 +1,133 @@
+name: Load anime gallery
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: load-anime-gallery
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Generate docs/README.md
+        run: |
+          set -euo pipefail
+
+          placeholder="https://placewaifu.com/image/225/300?blur"
+          response_body=""
+          response_status=""
+
+          fetch_url() {
+            local url="$1"
+            local max_attempts="${2:-3}"
+            local attempt=1
+            local response
+            local delays=(5 10)
+
+            while (( attempt <= max_attempts )); do
+              sleep 1.1
+              response=$(curl -sS --connect-timeout 10 --max-time 30 -w '\n%{http_code}' "$url" 2>/dev/null) || response=$'\n000'
+              response_status="${response##*$'\n'}"
+              response_body="${response%$'\n'*}"
+
+              if [[ "$response_status" == "200" ]]; then
+                return 0
+              fi
+
+              if [[ "$response_status" == "429" || "$response_status" =~ ^5[0-9][0-9]$ || "$response_status" == "000" ]]; then
+                if (( attempt == max_attempts )); then
+                  break
+                fi
+                local delay=${delays[$((attempt - 1))]}
+                echo "  HTTP $response_status for $url - retrying in ${delay}s (attempt $((attempt + 1))/$max_attempts)"
+                sleep "$delay"
+                attempt=$((attempt + 1))
+                continue
+              fi
+
+              echo "  HTTP $response_status for $url - not retrying"
+              return 1
+            done
+
+            echo "  HTTP $response_status for $url after $attempt attempt(s)"
+            return 1
+          }
+
+          image_from_jikan() {
+            jq -r '.data.images.jpg.image_url // empty' <<< "$response_body" 2>/dev/null || true
+          }
+
+          image_from_jikan_pictures() {
+            jq -r '.data[0].jpg.image_url // .data[0].jpg.large_image_url // empty' <<< "$response_body" 2>/dev/null || true
+          }
+
+          image_from_mal_page() {
+            printf '%s' "$response_body" |
+              grep -oE 'https://cdn\.myanimelist\.net/images/anime/[^"'\''[:space:]]+\.(jpg|jpeg|png|webp)' |
+              head -n 1 || true
+          }
+
+          {
+            echo '<p align="center">'
+            echo '<img src="../media/MyAnimeListLogo.png" >'
+            echo ""
+            echo '#'
+            echo -n '<p align="center">'
+          } > docs/README.md
+          total=$(grep -oP 'anime/\K[0-9]+' docs/completed | wc -l)
+          current=0
+
+          while read -r id; do
+            current=$((current + 1))
+            echo "[$current/$total] Fetching anime ID: $id"
+            image_url=""
+
+            echo "  Trying official MyAnimeList page..."
+            if fetch_url "https://myanimelist.net/anime/$id" 1; then
+              image_url=$(image_from_mal_page)
+            fi
+
+            if [[ -z "$image_url" ]]; then
+              echo "  Official page failed, trying Jikan..."
+              if fetch_url "https://api.jikan.moe/v4/anime/$id"; then
+                image_url=$(image_from_jikan)
+                if [[ -z "$image_url" ]]; then
+                  echo "  No image in main endpoint, trying /pictures..."
+                  if fetch_url "https://api.jikan.moe/v4/anime/$id/pictures"; then
+                    image_url=$(image_from_jikan_pictures)
+                  fi
+                fi
+              fi
+            fi
+
+            if [[ -z "$image_url" ]]; then
+              image_url="$placeholder"
+              echo "  Using blurred placeholder"
+            else
+              echo "  Image found: $image_url"
+            fi
+
+            echo -n "<a href=\"https://myanimelist.net/anime/$id\"><img src=\"$image_url\" width=\"225\" height=\"300\"></a> " >> docs/README.md
+          done < <(grep -oP 'anime/\K[0-9]+' docs/completed)
+
+          echo "</p>" >> docs/README.md
+          echo "" >> docs/README.md
+          echo "Finished processing $total anime entries"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/README.md
+          if git diff --staged --quiet; then
+            exit 0
+          fi
+          git commit -m "docs: update anime gallery [skip ci]"
+          git push
